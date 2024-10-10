@@ -1,0 +1,201 @@
+package enc
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"testing"
+
+	"opcua-go/opcua/uamsg"
+
+	"opcua-go/opcua/util"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func Test_bufferedDecoder_ReadMsg(t *testing.T) {
+	tests := []struct {
+		name    string
+		d       Decoder
+		want    *uamsg.Message
+		wantErr bool
+	}{
+		{
+			name: "decode hello message",
+			d: NewDefaultDecoder(
+				bytes.NewBuffer([]byte{0x48, 0x45, 0x4c, 0x46, 0x50, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xff, 0xff, 0x0, 0x0, 0xff, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x30, 0x0, 0x0, 0x0, 0x6f, 0x70, 0x63, 0x2e, 0x74, 0x63, 0x70, 0x3a, 0x2f, 0x2f, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x3a, 0x35, 0x33, 0x35, 0x33, 0x30, 0x2f, 0x4f, 0x50, 0x43, 0x55, 0x41, 0x2f, 0x53, 0x69, 0x6d, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72}),
+				102400,
+			),
+			want: &uamsg.Message{
+				MessageHeader: &uamsg.MessageHeader{
+					MessageType: uamsg.HelloMessageType,
+					ChunkType:   uamsg.FinalChunkType,
+					MessageSize: 80,
+				},
+				MessageBody: &uamsg.HelloMessageExtras{
+					ProtocolVersion:   0,
+					ReceiveBufferSize: 65535,
+					SendBufferSize:    65535,
+					MaxMessageSize:    0,
+					MaxChunkCount:     0,
+					EndpointUrl:       "opc.tcp://localhost:53530/OPCUA/SimulationServer",
+				},
+			},
+		},
+		{
+			name: "decode acknowledge message",
+			d: NewDefaultDecoder(
+				bytes.NewBuffer([]byte{0x41, 0x43, 0x4b, 0x46, 0x1c, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x20, 0x0, 0x0, 0x4, 0x20, 0x0, 0x0, 0xc0, 0xff, 0x3f, 0x0, 0x0, 0x0, 0x0, 0x0}),
+				102400,
+			),
+			want: &uamsg.Message{
+				MessageHeader: &uamsg.MessageHeader{
+					MessageType: uamsg.AcknowledgeMessageType,
+					ChunkType:   uamsg.FinalChunkType,
+					MessageSize: 28,
+				},
+				MessageBody: &uamsg.AcknowledgeMessageExtras{
+					ProtocolVersion:   0,
+					ReceiveBufferSize: 8196,
+					SendBufferSize:    8196,
+					MaxMessageSize:    4194240,
+					MaxChunkCount:     0,
+				},
+			},
+		},
+		{
+			name: "decode open secure channel request message",
+			d: NewDefaultDecoder(
+				bytes.NewBuffer([]byte{0x4f, 0x50, 0x4e, 0x46, 0x84, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2f, 0x0, 0x0, 0x0, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x6f, 0x70, 0x63, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x6f, 0x72, 0x67, 0x2f, 0x55, 0x41, 0x2f, 0x53, 0x65, 0x63, 0x75, 0x72, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x23, 0x4e, 0x6f, 0x6e, 0x65, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0xbe, 0x1, 0x0, 0x0, 0x4e, 0x2d, 0xce, 0xbc, 0x10, 0x14, 0xdb, 0x1, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xff, 0xff, 0xff, 0xff, 0x10, 0x27, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x80, 0xee, 0x36, 0x0}),
+				102400,
+			),
+			want: &uamsg.Message{
+				MessageHeader: &uamsg.MessageHeader{
+					MessageType:     uamsg.OpenSecureChannelMessageType,
+					ChunkType:       uamsg.FinalChunkType,
+					MessageSize:     132,
+					SecureChannelId: util.GetPtr(uint32(0)),
+				},
+				SecurityHeader: &uamsg.AsymmetricSecurityHeader{
+					SecurityPolicyUri:             []byte("http://opcfoundation.org/UA/SecurityPolicy#None"),
+					SenderCertificate:             nil,
+					ReceiverCertificateThumbprint: nil,
+				},
+				SequenceHeader: &uamsg.SequenceHeader{
+					SequenceNumber: 1,
+					RequestId:      1,
+				},
+				MessageBody: &uamsg.GenericBody{
+					TypeId: &uamsg.ExpandedNodeId{
+						NodeId: &uamsg.NodeId{
+							EncodingType: uamsg.FourByte,
+							Namespace:    0,
+							Identifier:   uint16(446),
+						},
+					},
+					Service: &uamsg.OpenSecureChannelServiceRequest{
+						Header: &uamsg.RequestHeader{
+							AuthenticationToken: &uamsg.NodeId{
+								EncodingType: uamsg.TwoByte,
+								Identifier:   byte(0),
+							},
+							Timestamp:         133722676057222478,
+							RequestHandle:     1,
+							ReturnDiagnostics: 0,
+							AuditEntryId:      "",
+							TimeoutHint:       10000,
+							AdditionalHeader: &uamsg.ExtensionObject{
+								TypeId: &uamsg.NodeId{
+									EncodingType: uamsg.TwoByte,
+									Identifier:   byte(0),
+								},
+								Encoding: 0x00,
+							},
+						},
+						ClientProtocolVersion: 0,
+						RequestType:           0,
+						SecurityMode:          1,
+						ClientNonce:           []byte{},
+						RequestedLifetime:     3600000,
+					},
+				},
+			},
+		},
+		{
+			name: "decode open secure channel response message",
+			d: NewDefaultDecoder(
+				bytes.NewBuffer([]byte{0x4f, 0x50, 0x4e, 0x46, 0x87, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x2f, 0x0, 0x0, 0x0, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x6f, 0x70, 0x63, 0x66, 0x6f, 0x75, 0x6e, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x6f, 0x72, 0x67, 0x2f, 0x55, 0x41, 0x2f, 0x53, 0x65, 0x63, 0x75, 0x72, 0x69, 0x74, 0x79, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x23, 0x4e, 0x6f, 0x6e, 0x65, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xe9, 0x1, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0xc1, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xff, 0xff, 0xff, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0xa0, 0x23, 0xce, 0xbc, 0x10, 0x14, 0xdb, 0x1, 0x80, 0xee, 0x36, 0x0, 0x0, 0x0, 0x0, 0x0}),
+				102400,
+			),
+			want: &uamsg.Message{
+				MessageHeader: &uamsg.MessageHeader{
+					MessageType:     uamsg.OpenSecureChannelMessageType,
+					ChunkType:       uamsg.FinalChunkType,
+					MessageSize:     135,
+					SecureChannelId: util.GetPtr(uint32(2)),
+				},
+				SecurityHeader: &uamsg.AsymmetricSecurityHeader{
+					SecurityPolicyUri:             []byte("http://opcfoundation.org/UA/SecurityPolicy#None"),
+					SenderCertificate:             nil,
+					ReceiverCertificateThumbprint: nil,
+				},
+				SequenceHeader: &uamsg.SequenceHeader{
+					SequenceNumber: 489,
+					RequestId:      1,
+				},
+				MessageBody: &uamsg.GenericBody{
+					TypeId: &uamsg.ExpandedNodeId{
+						NodeId: &uamsg.NodeId{
+							EncodingType: uamsg.FourByte,
+							Namespace:    0,
+							Identifier:   uint16(449),
+						},
+					},
+					Service: &uamsg.OpenSecureChannelServiceResponse{
+						Header: &uamsg.ResponseHeader{
+							Timestamp:     0,
+							RequestHandle: 1,
+							ServiceResult: 0,
+							ServiceDiagnostics: &uamsg.DiagnosticInfo{
+								EncodingMask: 0x00,
+							},
+							StringTable: nil,
+							AdditionalHeader: &uamsg.ExtensionObject{
+								TypeId: &uamsg.NodeId{
+									EncodingType: uamsg.TwoByte,
+									Identifier:   byte(0),
+								},
+								Encoding: 0x00,
+							},
+						},
+						ServerProtocolVersion: 0,
+						SecurityToken: &uamsg.ChannelSecurityToken{
+							ChannelID:       2,
+							TokenID:         1,
+							CreatedAt:       133722676057220000,
+							RevisedLifetime: 3600000,
+						},
+						ServerNonce: []byte{},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.d.ReadMsg()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("bufferedDecoder.ReadMsg() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			gotBytes, err1 := json.Marshal(got)
+			assert.Empty(t, err1)
+			wantBytes, err2 := json.Marshal(tt.want)
+			assert.Empty(t, err2)
+			if !reflect.DeepEqual(gotBytes, wantBytes) {
+				t.Errorf("bufferedDecoder.ReadMsg() = %v, want %v", string(gotBytes), string(wantBytes))
+			}
+		})
+	}
+}
